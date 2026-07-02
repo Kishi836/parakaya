@@ -160,9 +160,10 @@ jobs:
 - [ ] **Step 5: Commit (and create the GitHub repo when ready)**
 
 ```powershell
-git add -A
+git add Cargo.toml README.md .gitignore .github/workflows/ci.yml docs/ crates/
 git commit -m "chore: workspace scaffold, CI, design docs"
 ```
+(Stage named paths, never `git add -A` — the repo contains local-only files like `.cargo/config.toml` and `.superpowers/`.)
 
 ---
 
@@ -1238,9 +1239,10 @@ impl Vm {
 - [ ] **Step 5: Commit, push, verify CI, update README status**
 
 ```powershell
-git add -A
+git add crates README.md
 git commit -m "feat(vm): public instantiate/invoke API; M1 exit criterion green"
 ```
+(Stage the files you changed by name — never `git add -A`; the repo contains local-only files.)
 Create the GitHub repo (`gh repo create parakaya --public --source . --push` or via web), confirm the Actions run is green, and change README status line to: `Status: M1 complete — WASM i32 subset executes from real .wasm binaries. Next: M2 (full interpreter + spec test suite).`
 
 ---

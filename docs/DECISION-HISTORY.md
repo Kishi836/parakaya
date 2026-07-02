@@ -191,6 +191,16 @@ survival to June 2027, ~99% resume-value survival.
   reviews/unblocks** (project doubles as the user's Rust bootcamp — ownership matters for
   interviews). M1 execution begins.
 
+### M1 execution log
+- **Task 1 COMPLETE (2026-07-02).** Commit `c9317ed` (scaffold) + `bbdc005` (agent-skills config).
+  Review: spec ✅, quality Approved, no Critical/Important. Toolchain saga: rustup MSVC installed;
+  GNU toolchain tried and reverted (Windows blocked its rustc); VS Build Tools installed → linker
+  verified. `/setup-matt-pocock-skills` done: GitHub tracker (gh), default 5 triage labels,
+  single-context CONTEXT.md seeded with the Parakaya glossary. Repo: Projects\Parakaya, branch main.
+  SDD ledger: `.superpowers/sdd/progress.md` in the repo.
+- **NEXT: Task 2 (user drives)** — Value enum + stack + straight-line i32 arithmetic
+  (plan `docs/2026-07-02-parakaya-m1-vm-skeleton-plan.md`, Task 2). AI reviews on request.
+
 ## Process rules in force
 
 - Brainstorming skill (superpowers): one question at a time, 2–3 approaches with trade-offs,
