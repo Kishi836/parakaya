@@ -205,7 +205,22 @@ survival to June 2027, ~99% resume-value survival.
   Tasks 3–7 committed with `git commit -am`, which skips the new files Tasks 4/5/7 create (would
   commit `lib.rs` declaring a module whose file is missing → CI break); now `git add
   crates/parakaya-vm/src; git commit -m`.
-- **NEXT: Task 3 (user drives)** — locals and i32 comparisons.
+- **Task 3 COMPLETE (2026-10-08, user-driven)** — locals + comparisons (`712ba2b`).
+- **Tasks 4–8 COMPLETE locally (2026-10-08, AI-executed at user request — user in class).**
+  `d1e058d` control flow · `6ccf8bd` call frames · `f4917a8` memory · `561950d` decoder ·
+  `28595f9` public `Vm` API. **M1 exit criterion green locally:** 18 unit + 3 end-to-end tests
+  (WAT factorial, memory counter, unknown export); clippy `-D warnings` + fmt clean.
+  Plan bugs found and fixed, each with a test that fails on the plan's code:
+  1. `If`/`Else` leaked control frames (then-arm reaching `Else`, and `if(0)` with no else, both
+     skipped `End` without popping) → later `br` depths resolved against stale frames.
+  2. `br` out of a function walked into the **caller's** control frames; now bounded by the
+     frame's `ctrl_base`, and `br` to the function body = return (WASM semantics).
+  3. `run` silently zero-padded a wrong argument count; now traps `TypeMismatch`.
+  4. Decoder accepted a section claiming bytes past EOF; now `UnexpectedEof`.
+  Also: jump tables built once per `run` (plan cloned a HashMap on every instruction).
+  Deferred: malformed modules panic rather than error — documented M1 "no validation pass".
+- **NEXT:** create the GitHub remote + confirm CI green + README status (plan Task 8 Step 5,
+  awaiting user OK to publish), then write the M2 plan.
 
 ## Process rules in force
 
