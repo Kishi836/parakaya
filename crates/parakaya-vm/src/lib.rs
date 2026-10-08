@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod decode;
 pub mod error;
 pub mod exec;
 pub mod instr;

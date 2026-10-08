@@ -7,3 +7,13 @@ pub enum Trap {
     TypeMismatch, //type of value is not compatible with the operation (int and char cant be compared)
     IntegerOverflow,
 }
+
+/// Why a `.wasm` binary could not be turned into a `Module`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DecodeError {
+    BadMagic,
+    UnexpectedEof,
+    UnsupportedOpcode(u8),
+    UnsupportedSection(u8),
+    Malformed(&'static str),
+}
