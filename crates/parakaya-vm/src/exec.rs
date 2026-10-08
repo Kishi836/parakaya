@@ -1,6 +1,6 @@
 use crate::error::Trap;
-use crate::value::Value;
 use crate::instr::Instr;
+use crate::value::Value;
 
 #[derive(Debug, Default)]
 pub struct Interp {
@@ -42,12 +42,16 @@ pub fn eval_body(instrs: &[Instr], n_locals: usize) -> Result<Option<Value>, Tra
             Instr::I32Sub => it.bin_i32(|a, b| Ok(a.wrapping_sub(b)))?,
             Instr::I32Mul => it.bin_i32(|a, b| Ok(a.wrapping_mul(b)))?,
             Instr::I32DivS => it.bin_i32(|a, b| match (a, b) {
-            (_, 0) => Err(Trap::DivByZero),
-            (i32::MIN, -1) => Err(Trap::IntegerOverflow),
-            _ => Ok(a / b),
+                (_, 0) => Err(Trap::DivByZero),
+                (i32::MIN, -1) => Err(Trap::IntegerOverflow),
+                _ => Ok(a / b),
             })?,
             Instr::I32RemS => it.bin_i32(|a, b| {
-                if b == 0 { Err(Trap::DivByZero) } else { Ok(a.wrapping_rem(b)) }
+                if b == 0 {
+                    Err(Trap::DivByZero)
+                } else {
+                    Ok(a.wrapping_rem(b))
+                }
             })?,
             Instr::Nop => {}
             Instr::Drop => {
@@ -91,42 +95,78 @@ mod tests {
 
     #[test]
     fn div_by_zero_traps() {
-        let body = [Instr::I32Const(1), Instr::I32Const(0), Instr::I32DivS, Instr::End];
+        let body = [
+            Instr::I32Const(1),
+            Instr::I32Const(0),
+            Instr::I32DivS,
+            Instr::End,
+        ];
         assert_eq!(eval_body(&body, 0), Err(Trap::DivByZero));
     }
 
     #[test]
     fn div_overflow_traps() {
-        let body = [Instr::I32Const(i32::MIN), Instr::I32Const(-1), Instr::I32DivS, Instr::End];
+        let body = [
+            Instr::I32Const(i32::MIN),
+            Instr::I32Const(-1),
+            Instr::I32DivS,
+            Instr::End,
+        ];
         assert_eq!(eval_body(&body, 0), Err(Trap::IntegerOverflow));
     }
 
     #[test]
     fn const_add() {
-        let body = [Instr::I32Const(2), Instr::I32Const(3), Instr::I32Add, Instr::End]; // 2 + 3 = 5
+        let body = [
+            Instr::I32Const(2),
+            Instr::I32Const(3),
+            Instr::I32Add,
+            Instr::End,
+        ]; // 2 + 3 = 5
         assert_eq!(eval_body(&body, 0), Ok(Some(Value::I32(5)))); // assert that the result of evaluating the body is equal to 5
     }
 
     #[test]
     fn arithmetic_wraps_and_divides() {
-        let body = [Instr::I32Const(i32::MAX), Instr::I32Const(1), Instr::I32Add, Instr::End]; // i32::MAX + 1 = i32::MIN (wraps around)
+        let body = [
+            Instr::I32Const(i32::MAX),
+            Instr::I32Const(1),
+            Instr::I32Add,
+            Instr::End,
+        ]; // i32::MAX + 1 = i32::MIN (wraps around)
         assert_eq!(eval_body(&body, 0), Ok(Some(Value::I32(i32::MIN)))); // wrapping
-        let body = [Instr::I32Const(7), Instr::I32Const(2), Instr::I32DivS, Instr::End]; // 7 / 2 = 3
+        let body = [
+            Instr::I32Const(7),
+            Instr::I32Const(2),
+            Instr::I32DivS,
+            Instr::End,
+        ]; // 7 / 2 = 3
         assert_eq!(eval_body(&body, 0), Ok(Some(Value::I32(3)))); // assert that the result of evaluating the body is equal to 3
     }
     #[test]
     fn locals_roundtrip() {
         let body = [
-            Instr::I32Const(41), Instr::LocalSet(0),
-            Instr::LocalGet(0), Instr::I32Const(1), Instr::I32Add,
-            Instr::LocalTee(1), Instr::Drop, Instr::LocalGet(1), Instr::End,
+            Instr::I32Const(41),
+            Instr::LocalSet(0),
+            Instr::LocalGet(0),
+            Instr::I32Const(1),
+            Instr::I32Add,
+            Instr::LocalTee(1),
+            Instr::Drop,
+            Instr::LocalGet(1),
+            Instr::End,
         ];
         assert_eq!(eval_body(&body, 2), Ok(Some(Value::I32(42))));
     }
 
     #[test]
     fn comparisons_yield_0_or_1() {
-        let body = [Instr::I32Const(3), Instr::I32Const(5), Instr::I32LtS, Instr::End];
+        let body = [
+            Instr::I32Const(3),
+            Instr::I32Const(5),
+            Instr::I32LtS,
+            Instr::End,
+        ];
         assert_eq!(eval_body(&body, 0), Ok(Some(Value::I32(1))));
         let body = [Instr::I32Const(0), Instr::I32Eqz, Instr::End];
         assert_eq!(eval_body(&body, 0), Ok(Some(Value::I32(1))));
