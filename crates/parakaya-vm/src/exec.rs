@@ -88,6 +88,19 @@ pub fn eval_body(instrs: &[Instr], n_locals: usize) -> Result<Option<Value>, Tra
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn div_by_zero_traps() {
+        let body = [Instr::I32Const(1), Instr::I32Const(0), Instr::I32DivS, Instr::End];
+        assert_eq!(eval_body(&body, 0), Err(Trap::DivByZero));
+    }
+
+    #[test]
+    fn div_overflow_traps() {
+        let body = [Instr::I32Const(i32::MIN), Instr::I32Const(-1), Instr::I32DivS, Instr::End];
+        assert_eq!(eval_body(&body, 0), Err(Trap::IntegerOverflow));
+    }
+
     #[test]
     fn const_add() {
         let body = [Instr::I32Const(2), Instr::I32Const(3), Instr::I32Add, Instr::End]; // 2 + 3 = 5
