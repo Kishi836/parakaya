@@ -6,6 +6,7 @@ pub enum Trap {
     StackUnderflow,    //stack is empty (pop() on empty stack)
     TypeMismatch, //type of value is not compatible with the operation (int and char cant be compared)
     IntegerOverflow,
+    UnknownExport,
 }
 
 /// Why a `.wasm` binary could not be turned into a `Module`.
