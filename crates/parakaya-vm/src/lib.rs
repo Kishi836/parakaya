@@ -1,13 +1,9 @@
 #![forbid(unsafe_code)]
 
-pub fn crate_wired() -> bool {
-    true
-}
+pub mod error;
+pub mod exec;
+pub mod instr;
+pub mod value;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn workspace_compiles() {
-        assert!(super::crate_wired());
-    }
-}
+pub use error::Trap;
+pub use value::Value;
