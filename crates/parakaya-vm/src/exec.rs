@@ -32,6 +32,8 @@ pub struct Interp {
     pub values: Vec<Value>,
     pub ctrls: Vec<CtrlFrame>,
     pub frames: Vec<Frame>,
+    /// Linear memory, little-endian, `min_pages * 64 KiB`.
+    pub memory: Vec<u8>,
 }
 
 impl Interp {
@@ -86,6 +88,9 @@ pub fn run(module: &Module, func_idx: u32, args: &[Value]) -> Result<Option<Valu
         .map(|f| crate::jumps::compute(&f.body))
         .collect();
     let mut it = Interp::default();
+    if let Some(mem) = module.memory {
+        it.memory = vec![0; mem.min_pages as usize * 65536];
+    }
     push_frame(&mut it, module, func_idx, args.to_vec());
     while let Some(frame) = it.frames.last() {
         let f = frame.func_idx as usize;
@@ -205,7 +210,24 @@ fn step(
         Instr::I32LeS => it.bin_i32(|a, b| Ok((a <= b) as i32))?,
         Instr::I32GtS => it.bin_i32(|a, b| Ok((a > b) as i32))?,
         Instr::I32GeS => it.bin_i32(|a, b| Ok((a >= b) as i32))?,
-        other => unimplemented!("instr {:?} arrives in a later task", other),
+        Instr::I32Load(m) => {
+            let addr = it.pop_i32()? as u32 as usize + m.offset as usize;
+            let bytes: [u8; 4] = it
+                .memory
+                .get(addr..addr + 4)
+                .ok_or(Trap::OutOfBoundsMemory)?
+                .try_into()
+                .unwrap(); // the slice is exactly 4 long
+            it.push(Value::I32(i32::from_le_bytes(bytes)));
+        }
+        Instr::I32Store(m) => {
+            let val = it.pop_i32()?;
+            let addr = it.pop_i32()? as u32 as usize + m.offset as usize;
+            it.memory
+                .get_mut(addr..addr + 4)
+                .ok_or(Trap::OutOfBoundsMemory)?
+                .copy_from_slice(&val.to_le_bytes());
+        }
     }
     it.frames[top].pc = pc + 1;
     Ok(())
@@ -268,7 +290,8 @@ fn branch(it: &mut Interp, module: &Module, depth: u32) -> Result<(), Trap> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::module::Export;
+    use crate::instr::MemArg;
+    use crate::module::{Export, MemoryDecl};
 
     #[test]
     fn div_by_zero_traps() {
@@ -542,5 +565,42 @@ mod tests {
     fn run_rejects_wrong_arity() {
         let m = single_export_module(vec![factorial()]);
         assert_eq!(run(&m, 0, &[]), Err(Trap::TypeMismatch));
+    }
+
+    fn memory_module(body: Vec<Instr>) -> Module {
+        let f = Function {
+            ty: FuncType {
+                params: 0,
+                results: 1,
+            },
+            n_locals: 0,
+            body,
+        };
+        let mut m = single_export_module(vec![f]);
+        m.memory = Some(MemoryDecl { min_pages: 1 });
+        m
+    }
+
+    #[test]
+    fn memory_store_load_roundtrip() {
+        let m = memory_module(vec![
+            Instr::I32Const(16),
+            Instr::I32Const(-7),
+            Instr::I32Store(MemArg { offset: 4 }),
+            Instr::I32Const(16),
+            Instr::I32Load(MemArg { offset: 4 }),
+            Instr::End,
+        ]);
+        assert_eq!(run(&m, 0, &[]), Ok(Some(Value::I32(-7))));
+    }
+
+    #[test]
+    fn out_of_bounds_traps() {
+        let m = memory_module(vec![
+            Instr::I32Const(65533),
+            Instr::I32Load(MemArg { offset: 0 }), // 65533+4 > 65536
+            Instr::End,
+        ]);
+        assert_eq!(run(&m, 0, &[]), Err(Trap::OutOfBoundsMemory));
     }
 }
