@@ -55,6 +55,29 @@ pub fn eval_body(instrs: &[Instr], n_locals: usize) -> Result<Option<Value>, Tra
             }
             Instr::Unreachable => return Err(Trap::Unreachable),
             Instr::End => break,
+            Instr::LocalGet(i) => {
+                let v = it.locals[*i as usize];
+                it.push(v);
+            }
+            Instr::LocalSet(i) => {
+                let v = it.pop()?;
+                it.locals[*i as usize] = v;
+            }
+            Instr::LocalTee(i) => {
+                let v = it.pop()?;
+                it.locals[*i as usize] = v;
+                it.push(v);
+            }
+            Instr::I32Eqz => {
+                let x = it.pop_i32()?;
+                it.push(Value::I32((x == 0) as i32));
+            }
+            Instr::I32Eq => it.bin_i32(|a, b| Ok((a == b) as i32))?,
+            Instr::I32Ne => it.bin_i32(|a, b| Ok((a != b) as i32))?,
+            Instr::I32LtS => it.bin_i32(|a, b| Ok((a < b) as i32))?,
+            Instr::I32LeS => it.bin_i32(|a, b| Ok((a <= b) as i32))?,
+            Instr::I32GtS => it.bin_i32(|a, b| Ok((a > b) as i32))?,
+            Instr::I32GeS => it.bin_i32(|a, b| Ok((a >= b) as i32))?,
             other => unimplemented!("instr {:?} arrives in a later task", other),
         }
         it.pc += 1;
@@ -65,7 +88,6 @@ pub fn eval_body(instrs: &[Instr], n_locals: usize) -> Result<Option<Value>, Tra
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn const_add() {
         let body = [Instr::I32Const(2), Instr::I32Const(3), Instr::I32Add, Instr::End]; // 2 + 3 = 5
@@ -78,5 +100,22 @@ mod tests {
         assert_eq!(eval_body(&body, 0), Ok(Some(Value::I32(i32::MIN)))); // wrapping
         let body = [Instr::I32Const(7), Instr::I32Const(2), Instr::I32DivS, Instr::End]; // 7 / 2 = 3
         assert_eq!(eval_body(&body, 0), Ok(Some(Value::I32(3)))); // assert that the result of evaluating the body is equal to 3
+    }
+    #[test]
+    fn locals_roundtrip() {
+        let body = [
+            Instr::I32Const(41), Instr::LocalSet(0),
+            Instr::LocalGet(0), Instr::I32Const(1), Instr::I32Add,
+            Instr::LocalTee(1), Instr::Drop, Instr::LocalGet(1), Instr::End,
+        ];
+        assert_eq!(eval_body(&body, 2), Ok(Some(Value::I32(42))));
+    }
+
+    #[test]
+    fn comparisons_yield_0_or_1() {
+        let body = [Instr::I32Const(3), Instr::I32Const(5), Instr::I32LtS, Instr::End];
+        assert_eq!(eval_body(&body, 0), Ok(Some(Value::I32(1))));
+        let body = [Instr::I32Const(0), Instr::I32Eqz, Instr::End];
+        assert_eq!(eval_body(&body, 0), Ok(Some(Value::I32(1))));
     }
 }

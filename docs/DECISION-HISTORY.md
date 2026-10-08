@@ -198,8 +198,14 @@ survival to June 2027, ~99% resume-value survival.
   verified. `/setup-matt-pocock-skills` done: GitHub tracker (gh), default 5 triage labels,
   single-context CONTEXT.md seeded with the Parakaya glossary. Repo: Projects\Parakaya, branch main.
   SDD ledger: `.superpowers/sdd/progress.md` in the repo.
-- **NEXT: Task 2 (user drives)** — Value enum + stack + straight-line i32 arithmetic
-  (plan `docs/2026-07-02-parakaya-m1-vm-skeleton-plan.md`, Task 2). AI reviews on request.
+- **Task 2 COMPLETE (2026-10-08, user-driven).** Commit `a588cd4`. Review found a plan bug:
+  `i32.div_s` used `wrapping_div`, so `i32::MIN / -1` returned `MIN` where the WASM spec requires a
+  trap. **Fix (user approved):** new `Trap::IntegerOverflow` variant + explicit `(i32::MIN, -1)` arm;
+  plan Task 2 updated with `div_by_zero_traps` / `div_overflow_traps` tests. Also fixed in plan:
+  Tasks 3–7 committed with `git commit -am`, which skips the new files Tasks 4/5/7 create (would
+  commit `lib.rs` declaring a module whose file is missing → CI break); now `git add
+  crates/parakaya-vm/src; git commit -m`.
+- **NEXT: Task 3 (user drives)** — locals and i32 comparisons.
 
 ## Process rules in force
 

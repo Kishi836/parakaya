@@ -176,7 +176,7 @@ git commit -m "chore: workspace scaffold, CI, design docs"
 **Interfaces:**
 - Produces:
   - `Value::{I32(i32), I64(i64), F32(f32), F64(f64)}` (`Copy, Clone, Debug, PartialEq`)
-  - `Trap::{Unreachable, DivByZero, OutOfBoundsMemory, StackUnderflow, TypeMismatch}`
+  - `Trap::{Unreachable, DivByZero, OutOfBoundsMemory, StackUnderflow, TypeMismatch, IntegerOverflow}`
   - `Instr` (M1 subset per Global Constraints), `MemArg { offset: u32 }`
   - `exec::Interp { values: Vec<Value>, ... }` with `fn push(&mut self, v: Value)` / `fn pop_i32(&mut self) -> Result<i32, Trap>`
   - free fn used by tests until Task 5: `exec::eval_body(instrs: &[Instr], n_locals: usize) -> Result<Option<Value>, Trap>`
@@ -223,6 +223,7 @@ pub enum Trap {
     OutOfBoundsMemory,
     StackUnderflow,
     TypeMismatch,
+    IntegerOverflow, // i32.div_s of i32::MIN / -1 (WASM spec: must trap, not wrap)
 }
 ```
 
@@ -292,8 +293,10 @@ pub fn eval_body(instrs: &[Instr], n_locals: usize) -> Result<Option<Value>, Tra
             Instr::I32Add => it.bin_i32(|a, b| Ok(a.wrapping_add(b)))?,
             Instr::I32Sub => it.bin_i32(|a, b| Ok(a.wrapping_sub(b)))?,
             Instr::I32Mul => it.bin_i32(|a, b| Ok(a.wrapping_mul(b)))?,
-            Instr::I32DivS => it.bin_i32(|a, b| {
-                if b == 0 { Err(Trap::DivByZero) } else { Ok(a.wrapping_div(b)) }
+            Instr::I32DivS => it.bin_i32(|a, b| match (a, b) {
+                (_, 0) => Err(Trap::DivByZero),
+                (i32::MIN, -1) => Err(Trap::IntegerOverflow), // spec traps; wrapping_div would return MIN
+                _ => Ok(a / b),
             })?,
             Instr::I32RemS => it.bin_i32(|a, b| {
                 if b == 0 { Err(Trap::DivByZero) } else { Ok(a.wrapping_rem(b)) }
@@ -325,9 +328,25 @@ pub use error::Trap;
 pub use value::Value;
 ```
 
-- [ ] **Step 4: Run tests** — `cargo test -p parakaya-vm` → both PASS. (Add a `div_by_zero_traps` test asserting `Err(Trap::DivByZero)` while here.)
+- [ ] **Step 4: Run tests** — `cargo test -p parakaya-vm` → both PASS. Then add the two trap tests and re-run → 4 PASS:
 
-- [ ] **Step 5: Commit** — `git add -A; git commit -m "feat(vm): value stack and i32 arithmetic execution"`
+```rust
+#[test]
+fn div_by_zero_traps() {
+    let body = [Instr::I32Const(1), Instr::I32Const(0), Instr::I32DivS, Instr::End];
+    assert_eq!(eval_body(&body, 0), Err(Trap::DivByZero));
+}
+
+#[test]
+fn div_overflow_traps() {
+    let body = [Instr::I32Const(i32::MIN), Instr::I32Const(-1), Instr::I32DivS, Instr::End];
+    assert_eq!(eval_body(&body, 0), Err(Trap::IntegerOverflow));
+}
+```
+
+(`i32.rem_s` needs no overflow case: the spec defines `i32::MIN % -1 = 0`, which `wrapping_rem` returns.)
+
+- [ ] **Step 5: Commit** — `git add Cargo.lock crates/parakaya-vm/src; git commit -m "feat(vm): value stack and i32 arithmetic execution"`
 
 ---
 
@@ -392,7 +411,7 @@ Instr::I32GeS => it.bin_i32(|a, b| Ok((a >= b) as i32))?,
 ```
 
 - [ ] **Step 4: Run — pass.**  
-- [ ] **Step 5: Commit** — `git commit -am "feat(vm): locals and i32 comparisons"`
+- [ ] **Step 5: Commit** — `git add crates/parakaya-vm/src; git commit -m "feat(vm): locals and i32 comparisons"`
 
 ---
 
@@ -555,7 +574,7 @@ fn branch(it: &mut Interp, depth: u32) -> Result<(), Trap> {
 ```
 
 - [ ] **Step 4: Run — pass** (also re-run all previous tests).  
-- [ ] **Step 5: Commit** — `git commit -am "feat(vm): structured control flow via jump table + control stack"`
+- [ ] **Step 5: Commit** — `git add crates/parakaya-vm/src; git commit -m "feat(vm): structured control flow via jump table + control stack"`
 
 ---
 
@@ -760,7 +779,7 @@ fn pop_frame(it: &mut Interp, module: &Module) -> Result<(), Trap> {
 (`Interp` gains `pub frames: Vec<Frame>`; locals now live per-frame — `LocalGet/Set/Tee` arms index `it.frames.last_mut().unwrap().locals`. `eval_body` becomes a wrapper building a one-function `Module` and calling `run`.)
 
 - [ ] **Step 4: Run all tests — pass.** Factorial proves guest recursion with a host-side loop: `Frame` count grows, Rust call depth doesn't.  
-- [ ] **Step 5: Commit** — `git commit -am "feat(vm): functions and explicit call frames (no host recursion)"`
+- [ ] **Step 5: Commit** — `git add crates/parakaya-vm/src; git commit -m "feat(vm): functions and explicit call frames (no host recursion)"`
 
 ---
 
@@ -832,7 +851,7 @@ Instr::I32Store(m) => {
 ```
 
 - [ ] **Step 4: Run — pass.**  
-- [ ] **Step 5: Commit** — `git commit -am "feat(vm): linear memory with bounds-checked i32 load/store"`
+- [ ] **Step 5: Commit** — `git add crates/parakaya-vm/src; git commit -m "feat(vm): linear memory with bounds-checked i32 load/store"`
 
 ---
 
@@ -1124,7 +1143,7 @@ pub enum DecodeError {
 ```
 
 - [ ] **Step 4: Run — pass.** Add one negative test: `decode::module(b"nope")` → `Err(DecodeError::BadMagic)`.  
-- [ ] **Step 5: Commit** — `git commit -am "feat(vm): wasm binary decoder for the M1 subset"`
+- [ ] **Step 5: Commit** — `git add crates/parakaya-vm/src; git commit -m "feat(vm): wasm binary decoder for the M1 subset"`
 
 ---
 
