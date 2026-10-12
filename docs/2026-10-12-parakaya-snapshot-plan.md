@@ -20,6 +20,8 @@ fixed-width little-endian file with an FNV-1a checksum. A small `parakaya` binar
 
 **Verified:** every code block below was built in a throwaway worktree on 2026-10-12 —
 33 tests green, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` clean.
+(`fnv1a_matches_reference_values` was added afterwards — its vectors were checked against a
+standalone build — making 34.)
 
 ## Global Constraints
 
@@ -457,6 +459,14 @@ mod tests {
     }
 
     #[test]
+    fn fnv1a_matches_reference_values() {
+        // published FNV-1a 64 test vectors: any correct implementation, anywhere, agrees
+        assert_eq!(fnv1a(b""), 0xcbf2_9ce4_8422_2325);
+        assert_eq!(fnv1a(b"a"), 0xaf63_dc4c_8601_ec8c);
+        assert_eq!(fnv1a(b"foobar"), 0x8594_4171_f739_67e8);
+    }
+
+    #[test]
     fn round_trip_is_lossless() {
         let snap = save(b"wasm", &sample());
         assert_eq!(load(&snap), Ok((b"wasm".to_vec(), sample())));
@@ -503,7 +513,7 @@ mod tests {
 - [ ] **Step 5: Run — expect red**
 
 Run: `cargo test -p parakaya-vm snapshot`
-Expected: compiles (with unused-variable warnings), the 5 snapshot tests FAIL with
+Expected: compiles (with unused-variable warnings), the 6 snapshot tests FAIL with
 `not yet implemented`.
 
 - [ ] **Step 6: Implement** — replace the three stubs (everything between the `use` lines and
@@ -684,7 +694,7 @@ fn get_values(r: &mut Reader) -> Result<Vec<Value>, SnapshotError> {
 - [ ] **Step 7: Run — expect green**
 
 Run: `cargo test`
-Expected: 25 unit + 3 end-to-end tests pass.
+Expected: 26 unit + 3 end-to-end tests pass.
 
 - [ ] **Step 8: Lint, format, commit**
 
@@ -1079,7 +1089,7 @@ fn cli(mut args: Vec<String>) -> Result<String, String> {
 - [ ] **Step 5: Run — expect green**
 
 Run: `cargo test`
-Expected: 25 unit + 3 cli + 3 end_to_end + 2 snapshot_equivalence = **33 passed**.
+Expected: 26 unit + 3 cli + 3 end_to_end + 2 snapshot_equivalence = **34 passed**.
 
 Then try it by hand (no args → usage, exit 1):
 
