@@ -65,19 +65,20 @@ module. Pause points are instruction boundaries (design doc §5 "Migration point
 
 ## 2. Snapshot format (`snapshot.rs`)
 
-All integers little-endian, fixed width. Every `usize` is written as `u64`.
+All integers little-endian, fixed width. Every `usize` — including every count and length —
+is written as `u64` (a full 65,536-page memory is exactly 2³² bytes, one past `u32::MAX`).
 
 ```
 magic      "PKSN"                          4 bytes
 version    u32 = 1
-wasm       len u32, then bytes             the program travels inside the snapshot
-values     count u32, each: tag u8 + payload
-             tag 0 = I32 (4 B), 1 = I64 (8 B), 2 = F32 (to_bits, 4 B), 3 = F64 (to_bits, 8 B)
-ctrls      count u32, each: opener_pc u64, end_pc u64, is_loop u8 (0/1), height u64
-frames     count u32, each: func_idx u32, pc u64,
-                            locals (count u32 + values as above),
+wasm       len u64, then bytes             the program travels inside the snapshot
+values     count u64, each: tag u8 + payload
+             tag 0 = I32 (4 B), 1 = I64 (8 B), 2 = F32 (raw bits, 4 B), 3 = F64 (raw bits, 8 B)
+ctrls      count u64, each: opener_pc u64, end_pc u64, is_loop u8 (0/1), height u64
+frames     count u64, each: func_idx u32, pc u64,
+                            locals (count u64 + values as above),
                             value_base u64, ctrl_base u64
-memory     len u32, then bytes
+memory     len u64, then bytes
 checksum   u64 FNV-1a over every preceding byte
 ```
 
@@ -99,8 +100,10 @@ Design decisions:
   platform. A corrupted or truncated transfer fails loudly rather than resuming wrong state —
   silently wrong results are the worst failure a migration system can have.
 - **Reader reuse.** `decode.rs`'s bounds-checked `Reader` becomes `pub(crate)`; `snapshot.rs`
-  uses its `u8`/`bytes` and adds `u32_le`/`u64_le` helpers on top. One
+  uses its `u8`/`bytes` and adds `get_u32`/`get_u64` helpers on top. One
   `From<DecodeError> for SnapshotError` (→ `UnexpectedEof`) lets `?` work across both.
+  `SnapshotError` lives in `error.rs` beside `Trap` and `DecodeError`. `Reader::bytes` switches
+  to `checked_add`, so a crafted huge length is an error, not an overflow panic.
 - **Trailing bytes are an error** (`TrailingBytes`): a file must parse to exactly its checksum.
 
 ## 3. CLI (`src/main.rs`)

@@ -224,7 +224,13 @@ survival to June 2027, ~99% resume-value survival.
 - **Rescope (2026-10-06):** instead of the full M2, ship a file-based snapshot hop first —
   D11–12 `--pause-after N` / `resume <file>` with "interrupted run == uninterrupted run" test,
   D13 resume on a second device, D14 README + video. Daemon/WAL/mDNS stay future work.
-- **NEXT:** D11 snapshot/restore plan (`docs/2026-10-12-parakaya-snapshot-plan.md`).
+- **Snapshot design + plan (2026-10-12):** spec `docs/2026-10-12-parakaya-snapshot-design.md`,
+  plan `docs/2026-10-12-parakaya-snapshot-plan.md` (4 tasks; every snippet pre-verified in a
+  throwaway worktree — 33 tests green, clippy/fmt clean — to avoid M1's plan bugs). Choices:
+  hand-written LE format over serde/bincode (zero deps, explainable cross-ISA story); program
+  bytes embedded (one file to hop, no module hash); FNV-1a checksum verified before parsing;
+  all `usize`/counts/lengths as `u64` (a full 4 GiB memory overflows `u32`).
+- **NEXT:** D11 — plan Task 1 (pausable execution), user-typed.
 
 ## Process rules in force
 
