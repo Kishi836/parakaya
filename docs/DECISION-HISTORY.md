@@ -219,8 +219,12 @@ survival to June 2027, ~99% resume-value survival.
   4. Decoder accepted a section claiming bytes past EOF; now `UnexpectedEof`.
   Also: jump tables built once per `run` (plan cloned a HashMap on every instruction).
   Deferred: malformed modules panic rather than error — documented M1 "no validation pass".
-- **NEXT:** create the GitHub remote + confirm CI green + README status (plan Task 8 Step 5,
-  awaiting user OK to publish), then write the M2 plan.
+- **M1 SHIPPED (2026-10-12)** — pushed to github.com/Kishi836/parakaya, CI green, README status
+  updated. User walked through the AI-written Tasks 4–8 code the same day.
+- **Rescope (2026-10-06):** instead of the full M2, ship a file-based snapshot hop first —
+  D11–12 `--pause-after N` / `resume <file>` with "interrupted run == uninterrupted run" test,
+  D13 resume on a second device, D14 README + video. Daemon/WAL/mDNS stay future work.
+- **NEXT:** D11 snapshot/restore plan (`docs/2026-10-12-parakaya-snapshot-plan.md`).
 
 ## Process rules in force
 
