@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 /// One open `block`/`loop`/`if`. `height` is the value-stack depth at entry,
 /// restored when a branch exits through this frame.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct CtrlFrame {
     pub opener_pc: usize,
     pub end_pc: usize,
@@ -17,7 +17,7 @@ pub struct CtrlFrame {
 
 /// One guest function activation. `value_base`/`ctrl_base` mark where this call's
 /// slice of the shared value and control stacks begins.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Frame {
     pub func_idx: u32,
     pub pc: usize,
@@ -26,8 +26,8 @@ pub struct Frame {
     pub ctrl_base: usize,
 }
 
-/// The entire VM state — plain owned data, so M2 snapshots are "serialize this struct".
-#[derive(Debug, Default)]
+/// The entire VM state — plain owned data, so a snapshot is "serialize this struct".
+#[derive(Debug, Default, PartialEq)]
 pub struct Interp {
     pub values: Vec<Value>,
     pub ctrls: Vec<CtrlFrame>,
@@ -75,28 +75,58 @@ pub fn eval_body(instrs: &[Instr], n_locals: usize) -> Result<Option<Value>, Tra
     run(&module, 0, &[])
 }
 
-/// Call `func_idx` with `args`. Guest calls push `Frame`s onto `Interp.frames` and this
-/// loop keeps stepping the top one — the host never recurses, however deep the guest goes.
+/// Call `func_idx` with `args` and run it to completion.
 pub fn run(module: &Module, func_idx: u32, args: &[Value]) -> Result<Option<Value>, Trap> {
+    let mut it = start(module, func_idx, args)?;
+    match resume(module, &mut it, u64::MAX)? {
+        Outcome::Done(result) => Ok(result),
+        Outcome::Paused => unreachable!("u64::MAX steps never runs out"),
+    }
+}
+/// What a `resume` call ended with.
+#[derive(Debug, PartialEq)]
+pub enum Outcome {
+    /// The called function returned (with its result, if it has one).
+    Done(Option<Value>),
+    /// The step budget ran out first; the `Interp` can be resumed (or snapshotted).
+    Paused,
+}
+/// Set up a call to `func_idx` with `args` without executing anything.
+pub fn start(module: &Module, func_idx: u32, args: &[Value]) -> Result<Interp, Trap> {
     if args.len() != module.funcs[func_idx as usize].ty.params {
         return Err(Trap::TypeMismatch);
     }
-    // ponytail: every function's jump table is rebuilt per run; move to decode time in M2.
-    let jumps: Vec<HashMap<usize, JumpInfo>> = module
-        .funcs
-        .iter()
-        .map(|f| crate::jumps::compute(&f.body))
-        .collect();
     let mut it = Interp::default();
     if let Some(mem) = module.memory {
         it.memory = vec![0; mem.min_pages as usize * 65536];
     }
     push_frame(&mut it, module, func_idx, args.to_vec());
-    while let Some(frame) = it.frames.last() {
+    Ok(it)
+}
+
+/// Execute at most `max_steps` instructions. Guest calls push `Frame`s onto `it.frames` and
+/// this loop keeps stepping the top one — the host never recurses, so all state stays in `it`
+/// and a `Paused` interpreter can be continued later, even in another process.
+pub fn resume(module: &Module, it: &mut Interp, max_steps: u64) -> Result<Outcome, Trap> {
+    // ponytail: every function's jump table is rebuilt per resume; move to decode time in M2.
+    let jumps: Vec<HashMap<usize, JumpInfo>> = module
+        .funcs
+        .iter()
+        .map(|f| crate::jumps::compute(&f.body))
+        .collect();
+    for _ in 0..max_steps {
+        let Some(frame) = it.frames.last() else {
+            break; // program finished inside the budget
+        };
         let f = frame.func_idx as usize;
-        step(&mut it, module, &module.funcs[f].body, &jumps[f])?;
+        step(it, module, &module.funcs[f].body, &jumps[f])?;
     }
-    Ok(it.values.pop())
+    // decide AFTER the loop: the last step of the budget may be the one that finished
+    if it.frames.is_empty() {
+        Ok(Outcome::Done(it.values.pop()))
+    } else {
+        Ok(Outcome::Paused)
+    }
 }
 
 /// Execute the instruction at the top frame's pc.
@@ -602,5 +632,36 @@ mod tests {
             Instr::End,
         ]);
         assert_eq!(run(&m, 0, &[]), Err(Trap::OutOfBoundsMemory));
+    }
+    #[test]
+    fn resume_budget_is_exact() {
+        // 4 instructions: const, const, add, End
+        let m = memory_module(vec![
+            Instr::I32Const(2),
+            Instr::I32Const(3),
+            Instr::I32Add,
+            Instr::End,
+        ]);
+        let mut it = start(&m, 0, &[]).unwrap();
+        assert_eq!(resume(&m, &mut it, 0), Ok(Outcome::Paused)); // nothing ran
+        assert_eq!(resume(&m, &mut it, 3), Ok(Outcome::Paused)); // const, const, add
+        assert_eq!(it.values, vec![Value::I32(5)]);
+        assert_eq!(
+            resume(&m, &mut it, 1), // the 4th step (End) returns
+            Ok(Outcome::Done(Some(Value::I32(5))))
+        );
+    }
+
+    #[test]
+    fn trap_after_pause_still_traps() {
+        let m = memory_module(vec![
+            Instr::I32Const(1),
+            Instr::I32Const(0),
+            Instr::I32DivS,
+            Instr::End,
+        ]);
+        let mut it = start(&m, 0, &[]).unwrap();
+        assert_eq!(resume(&m, &mut it, 2), Ok(Outcome::Paused));
+        assert_eq!(resume(&m, &mut it, u64::MAX), Err(Trap::DivByZero));
     }
 }
